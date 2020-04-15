@@ -32,10 +32,10 @@ namespace ConsoleApplication1
             watcher.ScanningMode = BluetoothLEScanningMode.Passive;
 
             // Only activate the watcher when we're recieving values >= -80
-            watcher.SignalStrengthFilter.InRangeThresholdInDBm = -100;
+            watcher.SignalStrengthFilter.InRangeThresholdInDBm = -80;
 
             // Stop watching if the value drops below -90 (user walked away)
-            watcher.SignalStrengthFilter.OutOfRangeThresholdInDBm = -110;
+            watcher.SignalStrengthFilter.OutOfRangeThresholdInDBm = -90;
 
             // Register callback for when we see an advertisements
             watcher.Received += OnAdvertisementReceived;
@@ -60,10 +60,8 @@ namespace ConsoleApplication1
 
             ConbeeBeacon beacon = new ConbeeBeacon();
 
-            if (eventArgs.BluetoothAddress.ToString("X2").StartsWith("D0") || true)
-            {
-
-                var manufacturerSections = eventArgs.Advertisement.ManufacturerData;
+               var manufacturerSections = eventArgs.Advertisement.ManufacturerData;
+            String datastring="";
                 if (manufacturerSections.Count > 0)
                 {
                     // Only print the first one of the list
@@ -72,17 +70,23 @@ namespace ConsoleApplication1
                     using (var reader = DataReader.FromBuffer(manufacturerData.Data))
                     {
                         reader.ReadBytes(data);
-
-                        beacon = ParseConbee(data);
                         
-                    }
+ //                       Console.WriteLine("");
+                    datastring=ByteArrayToString(data);
+                        
+                        beacon = ParseConbee(data);
+
+                        
+                }
 
                 }
-                if ((beacon.foundDegreeRough || beacon.foundDegreeDetailed || beacon.foundLux) && eventArgs.BluetoothAddress.ToString("X2").StartsWith("D0"))
+                if ((beacon.foundDegreeRough || beacon.foundDegreeDetailed || beacon.foundLux || beacon.foundHumidity) && 
+                (eventArgs.BluetoothAddress.ToString("X2").StartsWith("D0") ||
+                eventArgs.BluetoothAddress.ToString("X2").StartsWith("FC")))
                 {
                     Console.WriteLine();
-                    Console.WriteLine(String.Format("  {0} {1} (dBm: {2}) °C: {3} / {4} - Lux: {5}", DateTime.Now.ToString(), FormatMacID(eventArgs.BluetoothAddress.ToString("X2")), eventArgs.RawSignalStrengthInDBm, beacon.degreeCelsiusrough, beacon.degreeCelsiusdetailed, beacon.lux));
-
+                    Console.WriteLine(String.Format("  {0} {1} (dBm: {2}) °C: {3} / {4} - Lux: {5} - Luftfeuchte: {6} %", DateTime.Now.ToString(), FormatMacID(eventArgs.BluetoothAddress.ToString("X2")), eventArgs.RawSignalStrengthInDBm, beacon.degreeCelsiusrough, beacon.degreeCelsiusdetailed, beacon.lux, beacon.percentHumidity));
+                    Console.WriteLine(String.Format("  Data {0}", datastring));
                 }
                 else
                 {
@@ -94,11 +98,13 @@ namespace ConsoleApplication1
                     }
                     else
                     {
-                        Console.Write("+");
+                        Console.Write("?");
+                        //Console.WriteLine(FormatMacID(eventArgs.BluetoothAddress.ToString("X2")) + " " + eventArgs.Advertisement.LocalName);
+                        //Console.WriteLine(eventArgs.RawSignalStrengthInDBm);
                     }
                 }
 
-            }
+           
         }
         public static string ByteArrayToString(byte[] ba)
         {
@@ -123,12 +129,21 @@ namespace ConsoleApplication1
 
                 if (temparray[1].Equals(0x01))
                 {
-                
+
                     returnvalue.AmbientLight = ByteArrayToString(temparray);
                     String tempValue = ByteArrayToString(new byte[] { temparray[3], temparray[4] });
-                    
+
                     returnvalue.lux = (float)Int16.Parse(tempValue, System.Globalization.NumberStyles.HexNumber);
                     returnvalue.foundLux = true;
+                }
+                if (temparray[1].Equals(0x03))
+                {
+
+                    returnvalue.Humidity = ByteArrayToString(temparray);
+                    String tempValue = ByteArrayToString(new byte[] { temparray[3]});
+
+                    returnvalue.percentHumidity = (int)int.Parse(tempValue, System.Globalization.NumberStyles.HexNumber);
+                    returnvalue.foundHumidity = true;
                 }
 
                 if (temparray[1].Equals(0x02))
@@ -142,7 +157,7 @@ namespace ConsoleApplication1
                         byte[] bytes = new byte[] { temparray[3], temparray[4], temparray[5], temparray[6] };
                         bytes = bytes.Reverse().ToArray();
                         returnvalue.degreeCelsiusdetailed = BitConverter.ToSingle(bytes, 0); ;
-                        returnvalue.foundDegreeDetailed = false;
+                        returnvalue.foundDegreeDetailed = true;
                     }
                     if (temparray[2].Equals(0x04))
                     {
@@ -151,7 +166,7 @@ namespace ConsoleApplication1
 
                         String tempValue = ByteArrayToString(new byte[] { temparray[3], temparray[4] });
                         returnvalue.degreeCelsiusrough = (float)unchecked(Int16.Parse(tempValue, System.Globalization.NumberStyles.HexNumber)) / 100;
-                        returnvalue.foundDegreeRough = false;
+                        returnvalue.foundDegreeRough = true;
 
                     }
                 }
@@ -185,12 +200,15 @@ namespace ConsoleApplication1
         public String AmbientLight;
         public String TemperatureLong;
         public String TemperatureShort;
+        public String Humidity;
         public float lux;
         public float degreeCelsiusrough;
         public float degreeCelsiusdetailed;
+        public int percentHumidity;
         public bool foundLux = false;
         public bool foundDegreeRough = false;
         public bool foundDegreeDetailed = false;
+        public bool foundHumidity=false;
 
     }
 }
